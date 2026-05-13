@@ -21,6 +21,10 @@ tch-agent 是一个 Bun monorepo，采用分层架构：
 └─────────────────────────────────────────────┘
 ```
 
+## 延伸阅读
+
+面向复杂长程任务的 Manager / Solver / Observer 拆分、漂移监测、Ralph-loop、上下文压缩、记忆管理和多 agent 协作分析见：[Agent 长程任务架构分析](./docs/agent-long-task-architecture-analysis.md)。
+
 ## 包依赖图
 
 ```
