@@ -1,0 +1,1496 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BreachWeave Agent 长程任务架构分析 V2</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f8;
+      --panel: #ffffff;
+      --ink: #1f2328;
+      --muted: #68707a;
+      --line: #d9dee5;
+      --teal: #0f766e;
+      --teal-soft: #dff3ef;
+      --amber: #b45309;
+      --amber-soft: #fff2d8;
+      --red: #b91c1c;
+      --blue: #2563eb;
+      --code-bg: #111827;
+      --code-ink: #e5e7eb;
+      --shadow: 0 16px 40px rgba(31, 35, 40, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Inter", "Segoe UI", "Noto Sans SC", Arial, sans-serif;
+      line-height: 1.58;
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 22px;
+      background: rgba(255, 255, 255, 0.94);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(12px);
+    }
+
+    .brand {
+      min-width: 260px;
+    }
+
+    .brand strong {
+      display: block;
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+
+    .brand span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .top-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 34px;
+      padding: 7px 11px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .button.primary {
+      border-color: var(--teal);
+      color: #fff;
+      background: var(--teal);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(360px, 0.44fr) minmax(520px, 0.56fr);
+      gap: 16px;
+      padding: 16px;
+      min-height: calc(100vh - 64px);
+    }
+
+    .pane {
+      min-width: 0;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .pane-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .pane-header h1,
+    .pane-header h2 {
+      margin: 0;
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+
+    .pane-header p {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .search {
+      width: min(320px, 100%);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px 11px;
+      font: inherit;
+      font-size: 13px;
+      background: #fff;
+      color: var(--ink);
+    }
+
+    .analysis-body,
+    .module-body {
+      height: calc(100vh - 129px);
+      overflow: auto;
+    }
+
+    .analysis-body {
+      padding: 20px 24px 40px;
+    }
+
+    .analysis-body h1 {
+      margin: 0 0 14px;
+      font-size: 26px;
+      line-height: 1.22;
+      letter-spacing: 0;
+    }
+
+    .analysis-body h2 {
+      margin: 30px 0 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+      font-size: 20px;
+      letter-spacing: 0;
+    }
+
+    .analysis-body h3 {
+      margin: 20px 0 8px;
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+
+    .analysis-body p {
+      margin: 10px 0;
+    }
+
+    .analysis-body ul,
+    .analysis-body ol {
+      padding-left: 22px;
+    }
+
+    .analysis-body code {
+      padding: 2px 5px;
+      border-radius: 6px;
+      background: #eef1f4;
+      font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    .analysis-body table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: 13px;
+    }
+
+    .analysis-body th,
+    .analysis-body td {
+      border: 1px solid var(--line);
+      padding: 8px;
+      vertical-align: top;
+    }
+
+    .jump-link {
+      display: inline-flex;
+      margin-left: 8px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: var(--teal-soft);
+      color: var(--teal);
+      font-size: 12px;
+      font-weight: 600;
+      vertical-align: middle;
+    }
+
+    .module-body {
+      padding: 16px;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 0 0 14px;
+      background: linear-gradient(#fff 70%, rgba(255, 255, 255, 0));
+    }
+
+    .count-pill {
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: #eef1f4;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .map {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .map a {
+      display: block;
+      min-height: 74px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fafbfc;
+      color: var(--ink);
+    }
+
+    .map b {
+      display: block;
+      font-size: 13px;
+    }
+
+    .map span {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .module-nav,
+    .function-index {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0 0 16px;
+    }
+
+    .module-nav a,
+    .function-index a {
+      padding: 6px 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--ink);
+      font-size: 12px;
+    }
+
+    .module-card {
+      margin-bottom: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .module-card[hidden] {
+      display: none;
+    }
+
+    .module-head {
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfd;
+    }
+
+    .module-head h2 {
+      margin: 8px 0 4px;
+      font-size: 20px;
+      letter-spacing: 0;
+      line-height: 1.3;
+    }
+
+    .module-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--teal-soft);
+      color: var(--teal);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .tag.warn {
+      background: var(--amber-soft);
+      color: var(--amber);
+    }
+
+    .tag.red {
+      background: #fee2e2;
+      color: var(--red);
+    }
+
+    .module-content {
+      padding: 16px;
+    }
+
+    .module-content p {
+      margin: 0 0 12px;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 12px 0;
+    }
+
+    .mini {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfd;
+    }
+
+    .mini h3 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+
+    .mini ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .mini li {
+      margin: 6px 0;
+    }
+
+    .code-panel {
+      margin-top: 12px;
+      border: 1px solid #1f2937;
+      border-radius: 8px;
+      background: var(--code-bg);
+      color: var(--code-ink);
+      overflow: hidden;
+    }
+
+    .code-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border-bottom: 1px solid #374151;
+      background: #0b1220;
+      color: #cbd5e1;
+      font-size: 12px;
+    }
+
+    .code-head a {
+      color: #93c5fd;
+    }
+
+    pre {
+      margin: 0;
+      padding: 14px;
+      overflow: auto;
+      font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      tab-size: 4;
+    }
+
+    .loading,
+    .notice {
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfcfd;
+      color: var(--muted);
+    }
+
+    @media (max-width: 1080px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .analysis-body,
+      .module-body {
+        height: auto;
+        max-height: none;
+      }
+
+      .map {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 680px) {
+      .topbar,
+      .pane-header,
+      .toolbar {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .topbar,
+      .layout {
+        padding-left: 10px;
+        padding-right: 10px;
+      }
+
+      .toolbar,
+      .split,
+      .map {
+        grid-template-columns: 1fr;
+      }
+
+      .analysis-body,
+      .module-body {
+        padding: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <strong>BreachWeave Agent 长程任务架构分析 V2</strong>
+      <span>左侧 v1 原文，右侧模块、亮点、函数实现和 GitHub 精确行号</span>
+    </div>
+    <div class="top-actions">
+      <a class="button" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/docs/agent-long-task-architecture-analysis.md" target="_blank" rel="noreferrer">v1 文档</a>
+      <a class="button primary" href="https://github.com/Nishijujuba/BreachWeave/tree/gpt" target="_blank" rel="noreferrer">打开 gpt 分支</a>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="pane" id="analysis-pane">
+      <div class="pane-header">
+        <div>
+          <h1>原始分析文档</h1>
+          <p>从 `docs/agent-long-task-architecture-analysis.md` 动态加载</p>
+        </div>
+        <input class="search" id="analysisSearch" type="search" placeholder="搜索左侧文档">
+      </div>
+      <article class="analysis-body" id="analysisContent">
+        <div class="loading">正在加载 v1 分析文档...</div>
+      </article>
+    </section>
+
+    <section class="pane" id="module-pane">
+      <div class="pane-header">
+        <div>
+          <h2>模块与代码实现</h2>
+          <p>核心片段内嵌，完整上下文跳转到 GitHub</p>
+        </div>
+      </div>
+      <div class="module-body">
+        <div class="toolbar">
+          <input class="search" id="moduleSearch" type="search" placeholder="搜索模块、函数、设计点">
+          <span class="count-pill" id="moduleCount">14 个模块</span>
+        </div>
+
+        <div class="map" aria-label="架构四平面">
+          <a href="#module-manager"><b>控制平面</b><span>Manager 负责调度题目、solver 和 planner。</span></a>
+          <a href="#module-runtime"><b>执行平面</b><span>Runtime 启动容器、读取 JSONL、转发 host bridge。</span></a>
+          <a href="#module-observer-loop"><b>监督平面</b><span>Observer 以旁路审计的方式监测漂移。</span></a>
+          <a href="#module-memory"><b>状态平面</b><span>Idea、Memory、timeline 和 stats 承担耐压缩记录。</span></a>
+        </div>
+
+        <nav class="module-nav" aria-label="模块目录">
+          <a href="#module-manager">Manager</a>
+          <a href="#module-completion">结束判定</a>
+          <a href="#module-session">Session</a>
+          <a href="#module-runtime">Runtime</a>
+          <a href="#module-observer-loop">Observer Loop</a>
+          <a href="#module-observer-agent">Observer Agent</a>
+          <a href="#module-ralph">Ralph-loop</a>
+          <a href="#module-memory">Memory</a>
+          <a href="#module-bridge">Host Bridge</a>
+          <a href="#module-subagent">Subagent</a>
+          <a href="#module-compaction">Compaction</a>
+          <a href="#module-scope">Scope Guard</a>
+          <a href="#module-large-result">Large Result</a>
+          <a href="#module-timeline">Timeline/Stats</a>
+        </nav>
+
+        <div class="function-index" aria-label="函数索引">
+          <a href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/manager.ts#L712-L727" target="_blank" rel="noreferrer">tickPlanner</a>
+          <a href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/manager.ts#L1307-L1379" target="_blank" rel="noreferrer">runPlannerOnce</a>
+          <a href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/store.ts#L263-L272" target="_blank" rel="noreferrer">computeChallengeCompleted</a>
+          <a href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/session.ts#L108-L155" target="_blank" rel="noreferrer">createSolverSession</a>
+          <a href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/runtime/runtime.ts#L485-L546" target="_blank" rel="noreferrer">Runtime.launch</a>
+          <a href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/challenge-observer/observer-loop.ts#L234-L308" target="_blank" rel="noreferrer">attachObserverLoop</a>
+          <a href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/challenge-observer/ralph-loop.ts#L58-L87" target="_blank" rel="noreferrer">attachChallengeContinuation</a>
+          <a href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/config/tools/ingest-sub-agent-output.ts#L163-L233" target="_blank" rel="noreferrer">ingest_sub_agent_output</a>
+        </div>
+
+        <article class="module-card" id="module-manager" data-keywords="manager planner task split scheduling 调度 任务拆分">
+          <div class="module-head">
+            <div class="tag-row"><span class="tag">控制平面</span><span class="tag warn">任务拆分</span></div>
+            <h2>Challenge Manager：把长程任务切成可调度单元</h2>
+            <p>Manager 像调度塔台，负责题目实例、solver 槽位、planner prompt、上一轮动作和资源约束。</p>
+          </div>
+          <div class="module-content">
+            <p>它的核心价值是把“下一步派谁做什么”变成一个稳定的资源调度问题。planner snapshot 汇总未完成题目、活跃 solver、stale 状态和 prompt 统计，减少模型凭短期情绪频繁换线。</p>
+            <div class="split">
+              <div class="mini">
+                <h3>亮点</h3>
+                <ul>
+                  <li>用 `MAX_ACTIVE_CHALLENGES` 和 `maxSolvers` 给探索并发设硬边界。</li>
+                  <li>记录上一轮 planner digest，压低重复启动、重复停止、重复改阵型的概率。</li>
+                </ul>
+              </div>
+              <div class="mini">
+                <h3>关键函数</h3>
+                <ul>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/manager.ts#L712-L727">tickPlanner</a>：防重入并按配置触发调度。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/manager.ts#L1500-L1603">buildPlannerSnapshot</a>：把题目、solver、prompt 和统计压成 planner 输入。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/manager.ts#L1383-L1498">createPlannerTools</a>：把启动、停止、查状态封成 planner 可调用工具。</li>
+                </ul>
+              </div>
+            </div>
+            <div class="code-panel">
+              <div class="code-head"><span>manager.ts L712-L727</span><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/manager.ts#L712-L727">GitHub 跳转</a></div>
+              <pre><code>712 |     async tickPlanner(source = "challenge-planner:manual"): Promise&lt;string | undefined&gt; {
+713 |         const settings = await this.config.getHostSettings()
+714 |         resolvePlannerTickIntervalMs(settings.planner.tickIntervalMs)
+715 |         if (this.plannerRunning) return
+716 |         if (settings.planner.enabled !== true) return
+717 |
+718 |         this.plannerRunning = true
+719 |         try {
+720 |             return await this.runPlannerOnce(source)
+721 |         } catch (error) {
+722 |             this.error("challenge:planner", "tick failed", error, { source })
+723 |             return
+724 |         } finally {
+725 |             this.plannerRunning = false
+726 |         }
+727 |     }</code></pre>
+            </div>
+          </div>
+        </article>
+
+        <article class="module-card" id="module-completion" data-keywords="completion end 判定 flag store ralph">
+          <div class="module-head">
+            <div class="tag-row"><span class="tag red">结束判定</span><span class="tag">外部状态</span></div>
+            <h2>Challenge Store：用 flag 进度判断任务是否结束</h2>
+            <p>结束判定落在 store 的权威状态上，solver 的自我判断只作为过程信号。</p>
+          </div>
+          <div class="module-content">
+            <p>长程 agent 容易提前停止，尤其在拿到一个 flag 之后。这里用 `flag_count` 和 `flag_got_count` 定义完成条件，相当于把终止条件从主观叙述转到外部记账。</p>
+            <div class="split">
+              <div class="mini">
+                <h3>亮点</h3>
+                <ul>
+                  <li>完成条件很窄，只有已知 flag 总数大于 0 且获取数达标才算完成。</li>
+                  <li>Ralph-loop 和 host bridge 都复用同一个 store 判断，减少多处口径漂移。</li>
+                </ul>
+              </div>
+              <div class="mini">
+                <h3>关键函数</h3>
+                <ul>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/store.ts#L263-L266">computeChallengeCompleted</a>：纯函数完成判定。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/store.ts#L268-L272">isChallengeCompletedInStore</a>：从持久化记录读取后复用判定。</li>
+                </ul>
+              </div>
+            </div>
+            <div class="code-panel">
+              <div class="code-head"><span>store.ts L263-L272</span><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/store.ts#L263-L272">GitHub 跳转</a></div>
+              <pre><code>263 | export function computeChallengeCompleted(challenge: ChallengeInfoRecord | undefined): boolean {
+264 |     if (!challenge) return false
+265 |     return challenge.flag_count &gt; 0 &amp;&amp; challenge.flag_got_count &gt;= challenge.flag_count
+266 | }
+267 |
+268 | export async function isChallengeCompletedInStore(challengeId: string, challengeDir?: string): Promise&lt;boolean&gt; {
+269 |     const rootDir = resolveChallengeDir(challengeDir)
+270 |     const challenge = await readChallengeRecord(rootDir, requireText(challengeId, "challengeId"))
+271 |     return computeChallengeCompleted(challenge)
+272 | }</code></pre>
+            </div>
+          </div>
+        </article>
+
+        <article class="module-card" id="module-session" data-keywords="session solver extension prompt context workspace">
+          <div class="module-head">
+            <div class="tag-row"><span class="tag">会话组装</span><span class="tag warn">固定与自由度</span></div>
+            <h2>Solver Session：把 prompt、workspace、extension 组装成执行上下文</h2>
+            <p>Session 层是 agent 进入任务世界的入口，它决定模型能看见什么、在哪写文件、会被哪些 extension 约束。</p>
+          </div>
+          <div class="module-content">
+            <p>`createSolverSession` 读取 prompt 配置，建立 solver 目录和 workspace，并把 observer extension 绑定到会话中。注释掉的 extension 也很有信息量：它们显示系统已经预留大输出降噪、scope guard、RTK rewrite 等控制点。</p>
+            <div class="split">
+              <div class="mini">
+                <h3>亮点</h3>
+                <ul>
+                  <li>启动快照写入 `startup.json`，为复盘和统计保留 session 配置。</li>
+                  <li>observer 模型可从 prompt meta 单独指定，监督者和执行者可以使用不同模型。</li>
+                </ul>
+              </div>
+              <div class="mini">
+                <h3>关键函数</h3>
+                <ul>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/session.ts#L108-L155">createSolverSession</a>：构造 solver 主会话。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/session.ts#L158-L211">createSubagentSession</a>：构造共享 workspace 的子 agent 会话。</li>
+                </ul>
+              </div>
+            </div>
+            <div class="code-panel">
+              <div class="code-head"><span>session.ts L127-L153</span><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/session.ts#L127-L153">GitHub 跳转</a></div>
+              <pre><code>127 |     const observerEnabled = prompt.meta.observerEnabled === true
+128 |     const promptModel = typeof prompt.meta.model === "string" &amp;&amp; prompt.meta.model.trim() ? prompt.meta.model.trim() : undefined
+129 |     const observerModel = typeof prompt.meta.observerModel === "string" &amp;&amp; prompt.meta.observerModel.trim() ? prompt.meta.observerModel.trim() : promptModel
+130 |
+131 |     const extensions = [
+132 |         // largeToolResultExtension({ workspaceRoot: workspaceDir }),
+133 |         challengeObserverExtension({ observerEnabled, observerModel }),
+134 |         // rtkRewriteExtension(),
+135 |     ]
+136 |
+137 |     const sessionOpts = await config.resolvePromptSession(init.promptName, extensions)
+148 |     const { session } = await createAgentSession({
+149 |         ...sessionOpts,
+150 |         cwd: workspaceDir,
+151 |         sessionManager: SessionManager.create(workspaceDir, sessionDir),
+152 |     })
+153 |     await session.bindExtensions({})</code></pre>
+            </div>
+          </div>
+        </article>
+
+        <article class="module-card" id="module-runtime" data-keywords="runtime docker jsonl host bridge execution 任务执行">
+          <div class="module-head">
+            <div class="tag-row"><span class="tag">执行平面</span><span class="tag warn">JSONL 事件流</span></div>
+            <h2>Runtime Manager：容器执行、事件回流、host bridge 转发</h2>
+            <p>Runtime 是真实执行层，负责把 solver 跑进 Docker，并把 stdout JSONL 转成系统事件。</p>
+          </div>
+          <div class="module-content">
+            <p>这一层让模型动作可观察：容器启动、会话目录、workspace、host bridge 请求、tool result 和 agent_end 都进入统一事件流。长程任务的复盘能力很大程度来自这里。</p>
+            <div class="split">
+              <div class="mini">
+                <h3>亮点</h3>
+                <ul>
+                  <li>solver 状态、进程、环境变量、live message 分开记录，降低状态缠绕。</li>
+                  <li>JSONL 流里遇到 host bridge 请求会转发给宿主处理，再把响应送回 solver。</li>
+                </ul>
+              </div>
+              <div class="mini">
+                <h3>关键函数</h3>
+                <ul>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/runtime/runtime.ts#L485-L546">launch</a>：启动 solver 容器并注入 runtime/workspace。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/runtime/runtime.ts#L783-L838">readStream</a>：读取 stdout，解析 JSONL 事件。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/runtime/runtime.ts#L668-L725">getDetails</a>：聚合 main、subagent、observer 线程。</li>
+                </ul>
+              </div>
+            </div>
+            <div class="code-panel">
+              <div class="code-head"><span>runtime.ts L806-L830</span><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/runtime/runtime.ts#L806-L830">GitHub 跳转</a></div>
+              <pre><code>806 |                     for (const line of parts) {
+807 |                         if (!line.trim()) continue
+808 |                         try {
+809 |                             const parsed = JSON.parse(line)
+810 |                             if (isHostBridgeRequestEvent(parsed)) {
+811 |                                 await this.handleHostBridgeRequest(solverId, parsed)
+812 |                                 continue
+813 |                             }
+814 |                             if (parsed.type === "response") {
+815 |                                 if (!initResolved &amp;&amp; parsed.command === "init") {
+816 |                                     initResolved = true
+817 |                                     if (parsed.success) {
+818 |                                         resolveInit()
+819 |                                     } else {
+820 |                                         rejectInit(new Error(parsed.error ?? "init failed"))
+821 |                                     }
+822 |                                 }
+823 |                                 continue
+824 |                             }
+825 |                             const event = parsed as AgentSessionEvent
+826 |                             const finalError = getAgentEndError(event)
+827 |                             if (event.type === "agent_end") {
+828 |                                 this.recordAgentEnd(solverId, finalError)
+829 |                             }
+830 |                             this.emit(solverId, event)</code></pre>
+            </div>
+          </div>
+        </article>
+
+        <article class="module-card" id="module-observer-loop" data-keywords="observer loop drift monitoring 漂移 监督 review queue">
+          <div class="module-head">
+            <div class="tag-row"><span class="tag">监督平面</span><span class="tag warn">漂移监测</span></div>
+            <h2>Observer Loop：把执行轨迹切成可审计窗口</h2>
+            <p>Observer loop 监听主 agent 事件，把工具调用、结果摘要、assistant message 汇成 review payload。</p>
+          </div>
+          <div class="module-content">
+            <p>它的定位很克制：只做旁路观察、排队 review、必要时发纠偏提醒。这样主 solver 保持执行权，observer 保持审计权，职责边界清楚。</p>
+            <div class="split">
+              <div class="mini">
+                <h3>亮点</h3>
+                <ul>
+                  <li>review 队列串行 drain，避免多个 observer review 同时改看板。</li>
+                  <li>纠偏提醒经过去重和完成状态检查，减少无效打断。</li>
+                </ul>
+              </div>
+              <div class="mini">
+                <h3>关键函数</h3>
+                <ul>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/challenge-observer/observer-loop.ts#L218-L232">buildObserverPayload</a>：组装 review 输入。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/challenge-observer/observer-loop.ts#L234-L308">attachObserverLoop</a>：绑定事件监听和 review 队列。</li>
+                </ul>
+              </div>
+            </div>
+            <div class="code-panel">
+              <div class="code-head"><span>observer-loop.ts L257-L275</span><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/challenge-observer/observer-loop.ts#L257-L275">GitHub 跳转</a></div>
+              <pre><code>257 |     async function drainReviewQueue(): Promise&lt;void&gt; {
+258 |         if (reviewRunning) return
+259 |         reviewRunning = true
+260 |
+261 |         try {
+262 |             while (true) {
+263 |                 const next = await takeNextObserverReview()
+264 |                 if (!next) return
+265 |                 try {
+266 |                     await runSolverObserverReview(challengeIdText, next, {
+267 |                         observerModel: options.observerModel,
+268 |                         sendCorrectionNotice: async (message) =&gt; {
+269 |                             if (!(await shouldSendEfficiencyReminder(next, message))) {
+270 |                                 return false
+271 |                             }
+272 |                             pi.sendUserMessage(`纠偏提醒：${message.trim()}`, { deliverAs: "steer" })
+273 |                             return true
+274 |                         },
+275 |                     })</code></pre>
+            </div>
+          </div>
+        </article>
+
+        <article class="module-card" id="module-observer-agent" data-keywords="observer agent strategy board memory idea context corrosion 上下文腐烂">
+          <div class="module-head">
+            <div class="tag-row"><span class="tag">监督者</span><span class="tag warn">看板维护</span></div>
+            <h2>Observer Agent：维护 idea/memory，看见漂移时轻量纠偏</h2>
+            <p>Observer agent 读取最近 rounds 和 challenge 状态，更新策略看板与 durable memory。</p>
+          </div>
+          <div class="module-content">
+            <p>它的设计重点是降低上下文腐烂：把有价值事实沉淀到 memory，把待验证路线留在 idea，把低价值流水账排除在外。数学上可以理解为把原始上下文 \(C\) 投影到高信号状态 \(S=(M,I,R)\)。</p>
+            <div class="split">
+              <div class="mini">
+                <h3>亮点</h3>
+                <ul>
+                  <li>review 前先查询 `challenge_get_state`，题目完成后直接跳过。</li>
+                  <li>observer session 独立放在 `.observer`，监督轨迹可以单独复盘。</li>
+                </ul>
+              </div>
+              <div class="mini">
+                <h3>关键函数</h3>
+                <ul>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/challenge-observer/observer-agent.ts#L235-L257">buildObserverPrompt</a>：构造审计输入。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/challenge-observer/observer-agent.ts#L331-L386">runSolverObserverReview</a>：运行 observer agent。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/challenge-observer/observer-store.ts#L86-L120">observer-store</a>：持久化队列和 rounds。</li>
+                </ul>
+              </div>
+            </div>
+            <div class="code-panel">
+              <div class="code-head"><span>observer-agent.ts L344-L360</span><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/challenge-observer/observer-agent.ts#L344-L360">GitHub 跳转</a></div>
+              <pre><code>344 |     const rounds = Array.isArray(payload.rounds) ? payload.rounds.filter((item) =&gt; Array.isArray(item.tool_logs)) : []
+345 |     if (rounds.length === 0) return { applied: false }
+346 |
+347 |     const state = await requestHostBridge&lt;{ challenge?: ChallengeInfoRecord; is_completed: boolean }&gt;("challenge_get_state", {})
+348 |     if (state.is_completed) {
+349 |         return { applied: false }
+350 |     }
+351 |     const challenge = state.challenge
+352 |
+353 |     const config = await ConfigManager.getInstance()
+354 |     const sessionOpts = await resolveObserverSessionOptions(config, options?.observerModel, options?.sendCorrectionNotice)
+355 |     if (!sessionOpts?.resourceLoader) return { applied: false }
+356 |     const observerSessionDir = resolveObserverSessionDir()
+357 |     const observerWorkspaceDir = resolveObserverWorkspaceDir()
+358 |     await mkdir(observerSessionDir, { recursive: true })
+359 |
+360 |     const { session } = await createAgentSession({</code></pre>
+            </div>
+          </div>
+        </article>
+
+        <article class="module-card" id="module-ralph" data-keywords="ralph loop continuation retry end detection 续跑">
+          <div class="module-head">
+            <div class="tag-row"><span class="tag red">续跑循环</span><span class="tag">早停治理</span></div>
+            <h2>Ralph-loop：agent 结束后仍用外部状态决定是否续跑</h2>
+            <p>Ralph-loop 监听 `agent_end`，题目未完成时注入 continuation message 触发下一轮。</p>
+          </div>
+          <div class="module-content">
+            <p>这个模块专门处理“阶段性停顿被误当成终局”的问题。若上轮错误退出，它用指数退避控制重试；若题目未完成，它触发下一 turn，让 solver 在已有上下文上继续推进。</p>
+            <div class="split">
+              <div class="mini">
+                <h3>亮点</h3>
+                <ul>
+                  <li>续跑由 `challenge_is_completed` 驱动，避免 solver 自我早停。</li>
+                  <li>错误重试有上限和退避，防止无限错误循环。</li>
+                </ul>
+              </div>
+              <div class="mini">
+                <h3>关键函数</h3>
+                <ul>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/challenge-observer/ralph-loop.ts#L49-L56">isChallengeCompletedByHostBridge</a>：查询权威完成状态。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/challenge-observer/ralph-loop.ts#L58-L87">attachChallengeContinuation</a>：绑定 agent_end 并触发续跑。</li>
+                </ul>
+              </div>
+            </div>
+            <div class="code-panel">
+              <div class="code-head"><span>ralph-loop.ts L58-L87</span><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/challenge-observer/ralph-loop.ts#L58-L87">GitHub 跳转</a></div>
+              <pre><code> 58 | export function attachChallengeContinuation(pi: ExtensionAPI): void {
+ 59 |     let consecutiveErrors = 0
+ 60 |
+ 61 |     pi.on("agent_end", async (event) =&gt; {
+ 62 |         if (await isChallengeCompletedByHostBridge()) {
+ 63 |             return
+ 64 |         }
+ 65 |
+ 66 |         const errorMessage = getAgentEndError(event.messages)
+ 67 |         if (errorMessage) {
+ 68 |             consecutiveErrors += 1
+ 69 |             if (consecutiveErrors &gt; MAX_CHALLENGE_RETRY_ATTEMPTS) return
+ 70 |             await Bun.sleep(getChallengeDelayMs(consecutiveErrors))
+ 71 |         } else {
+ 72 |             consecutiveErrors = 0
+ 73 |         }
+ 74 |
+ 75 |         setImmediate(() =&gt; {
+ 76 |             pi.sendMessage(
+ 77 |                 {
+ 78 |                     customType: CHALLENGE_CUSTOM_MESSAGE_TYPE,
+ 79 |                     content: [{ type: "text", text: CHALLENGE_CONTINUATION_MESSAGE }],
+ 80 |                     display: false,
+ 81 |                     details: undefined,
+ 82 |                 },
+ 83 |                 { triggerTurn: true },
+ 84 |             )
+ 85 |         })
+ 86 |     })
+ 87 | }</code></pre>
+            </div>
+          </div>
+        </article>
+
+        <article class="module-card" id="module-memory" data-keywords="memory idea durable state context compression 记忆 上下文压缩">
+          <div class="module-head">
+            <div class="tag-row"><span class="tag">状态平面</span><span class="tag warn">记忆管理</span></div>
+            <h2>Idea / Memory Store：把假设和事实分层保存</h2>
+            <p>Idea 是待验证攻击路线，Memory 是耐压缩事实、证据、失败边界、hint 和约束。</p>
+          </div>
+          <div class="module-content">
+            <p>这层是对抗上下文腐烂的关键。Idea 像白板，允许被推进、验证、跳过；Memory 像证据柜，要求可复用、可引用、可跨轮保存。</p>
+            <div class="split">
+              <div class="mini">
+                <h3>亮点</h3>
+                <ul>
+                  <li>Idea 通过归一化文本做去重，降低同义路线反复出现。</li>
+                  <li>Memory 每条都有 `kind`、`refs`、`source`，利于压缩后继续追证据。</li>
+                </ul>
+              </div>
+              <div class="mini">
+                <h3>关键函数</h3>
+                <ul>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/memory.ts#L183-L202">appendChallengeMemory</a>：写 durable memory。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/memory.ts#L295-L325">addChallengeIdea</a>：新增或复用 idea。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/memory.ts#L337-L376">updateChallengeIdea</a>：推进 idea 生命周期。</li>
+                </ul>
+              </div>
+            </div>
+            <div class="code-panel">
+              <div class="code-head"><span>memory.ts L295-L325</span><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/memory.ts#L295-L325">GitHub 跳转</a></div>
+              <pre><code>295 | export async function addChallengeIdea(rootDir: string, challengeId: string, input: AddIdeaInput): Promise&lt;AddIdeaResult&gt; {
+296 |     const id = requireText(challengeId, "challengeId")
+297 |     const content = requireText(input.content, "content")
+298 |     const normalized = normalizeIdeaText(content)
+299 |     await ensureChallengeDirs(rootDir, id)
+300 |
+301 |     return withDirectoryLock(ideasLockDir(rootDir, id), async () =&gt; {
+302 |         const index = await readIdeasIndex(rootDir, id)
+303 |         const existingId = index.by_normalized_content[normalized]
+304 |         if (existingId) {
+305 |             const existing = await Bun.file(ideaByIdPath(rootDir, id, existingId)).json()
+306 |             return { idea: existing as IdeaRecord, created: false }
+307 |         }
+308 |
+309 |         const now = nowIso()
+310 |         const idea: IdeaRecord = {
+311 |             id: createEntityId("idea"),
+312 |             challenge_id: id,
+313 |             status: input.status ?? "pending",
+314 |             content,
+315 |             result: input.result?.trim() ?? "",
+316 |             created_at: now,
+317 |             updated_at: now,
+318 |         }
+319 |         await atomicWriteJson(ideaByIdPath(rootDir, id, idea.id), idea)
+320 |         index.by_normalized_content[normalized] = idea.id
+321 |         await writeIdeasIndex(rootDir, id, index)
+322 |         return { idea, created: true }
+323 |     })
+324 | }
+325 | </code></pre>
+            </div>
+          </div>
+        </article>
+
+        <article class="module-card" id="module-bridge" data-keywords="host bridge communication broadcast agent 通讯 协作同步">
+          <div class="module-head">
+            <div class="tag-row"><span class="tag">通讯层</span><span class="tag warn">协作同步</span></div>
+            <h2>Host Bridge：把 solver 请求接到宿主权威状态</h2>
+            <p>Host bridge 处理状态查询、hint、flag 提交、memory/idea 更新，并向同题 solver 广播。</p>
+          </div>
+          <div class="module-content">
+            <p>它像一个裁判兼广播台。solver 可以请求宿主状态，宿主可以把正确 flag、hint、看板更新同步给其他 solver，减少并行 agent 的重复劳动。</p>
+            <div class="split">
+              <div class="mini">
+                <h3>亮点</h3>
+                <ul>
+                  <li>flag 提交附带 solver、prompt、model 和 writeup 元数据。</li>
+                  <li>正确提交后向同题 solver 同步剩余 flag 和路线摘要。</li>
+                </ul>
+              </div>
+              <div class="mini">
+                <h3>关键函数</h3>
+                <ul>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/host-bridge-handler.ts#L141-L177">formatFlagSolvedBroadcastMessage</a>：生成同题广播。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/host-bridge-handler.ts#L179-L249">handleChallengeAction</a>：分发 challenge action。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/host-bridge-handler.ts#L251-L323">createChallengeHostBridgeHandler</a>：暴露宿主处理器。</li>
+                </ul>
+              </div>
+            </div>
+            <div class="code-panel">
+              <div class="code-head"><span>host-bridge-handler.ts L251-L279</span><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/host-bridge-handler.ts#L251-L279">GitHub 跳转</a></div>
+              <pre><code>251 | export function createChallengeHostBridgeHandler(challengeManager: ChallengeManager): HostBridgeHandler {
+252 |     return {
+253 |         async handle(context) {
+254 |             switch (context.action) {
+255 |                 case "challenge_get_state":
+256 |                 case "challenge_get_hint":
+257 |                 case "challenge_submit_flag":
+258 |                 case "challenge_is_completed":
+259 |                 case "memory_append":
+260 |                 case "memory_list":
+261 |                 case "memory_update":
+262 |                 case "memory_delete":
+263 |                 case "idea_list":
+264 |                 case "idea_search":
+265 |                 case "idea_add":
+266 |                 case "idea_update":
+267 |                 case "idea_delete":
+268 |                     return {
+269 |                         handled: true,
+270 |                         data: await handleChallengeAction(challengeManager, context),
+271 |                     }
+272 |                 default:
+273 |                     return { handled: false }
+274 |             }
+275 |         },
+276 |     }
+277 | }
+278 |
+279 | </code></pre>
+            </div>
+          </div>
+        </article>
+
+        <article class="module-card" id="module-subagent" data-keywords="subagent multi-agent parallel chain output contract 多 agent 分工 协作">
+          <div class="module-head">
+            <div class="tag-row"><span class="tag">多 Agent</span><span class="tag warn">结构化交付</span></div>
+            <h2>Subagent 工具链：分工、并行、链式推进和结果汇入</h2>
+            <p>主 agent 通过 subagent 工具把任务派给专用 agent，子 agent 用结构化 schema 交付。</p>
+          </div>
+          <div class="module-content">
+            <p>这里的设计像项目管理里的工单制：任务可以 single、parallel、chain，结果必须通过 `submit_sub_agent_output` 落成 canonical JSON，再由 `ingest_sub_agent_output` 合并到 hypothesis backlog。</p>
+            <div class="split">
+              <div class="mini">
+                <h3>亮点</h3>
+                <ul>
+                  <li>并发有 `MAX_PARALLEL_TASKS` 和 `MAX_CONCURRENCY`，分工有上限。</li>
+                  <li>输出 schema 收束 assets、hypotheses、findings、evidence 和 coverage gaps。</li>
+                </ul>
+              </div>
+              <div class="mini">
+                <h3>关键函数</h3>
+                <ul>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/config/tools/subagent.ts#L184-L198">mapWithConcurrencyLimit</a>：并发执行限制。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/config/tools/submit-sub-agent-output.ts#L17-L55">submit_sub_agent_output</a>：写入 canonical 输出。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/config/tools/ingest-sub-agent-output.ts#L163-L233">ingest_sub_agent_output</a>：汇入 backlog 和 run-state。</li>
+                </ul>
+              </div>
+            </div>
+            <div class="code-panel">
+              <div class="code-head"><span>submit-sub-agent-output.ts L17-L45</span><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/config/tools/submit-sub-agent-output.ts#L17-L45">GitHub 跳转</a></div>
+              <pre><code> 17 |     async execute(_toolCallId, params: SubmitSubAgentOutputInput, _signal, _onUpdate, ctx) {
+ 18 |         await ensurePentestWorkspace(ctx.cwd)
+ 19 |
+ 20 |         const output = createStructuredSubAgentOutput({
+ 21 |             outputId: params.output_id,
+ 22 |             role: params.role,
+ 23 |             stage: params.stage,
+ 24 |             objective: params.objective,
+ 25 |             context: params.context,
+ 26 |             policyRef: params.policy_ref ?? "run-policy.json",
+ 27 |             inputArtifacts: params.input_artifacts ?? [],
+ 28 |             expectedOutputSchema: params.expected_output_schema ?? DEFAULT_EXPECTED_OUTPUT_SCHEMA,
+ 29 |             markdownPath: params.markdown_path ?? `sub-agents/${params.output_id}.md`,
+ 30 |             payload: {
+ 31 |                 assets: params.assets,
+ 32 |                 hypotheses: params.hypotheses,
+ 33 |                 candidate_findings: params.candidate_findings,
+ 34 |                 evidence_refs: params.evidence_refs,
+ 35 |                 coverage_gaps: params.coverage_gaps,
+ 36 |                 goal: params.goal,
+ 37 |             },
+ 38 |         })
+ 39 |
+ 40 |         const outputPath = pentestSubAgentPath(ctx.cwd, params.output_id, "json")
+ 41 |         if (await Bun.file(outputPath).exists()) {
+ 42 |             throw new Error(`submit_sub_agent_output can only be called once for output_id "${params.output_id}"`)
+ 43 |         }
+ 44 |         await Bun.write(outputPath, JSON.stringify(output, null, 2))
+ 45 | </code></pre>
+            </div>
+          </div>
+        </article>
+
+        <article class="module-card" id="module-compaction" data-keywords="compaction context compression 上下文压缩 腐烂">
+          <div class="module-head">
+            <div class="tag-row"><span class="tag">上下文压缩</span><span class="tag warn">保真摘要</span></div>
+            <h2>Pentest Compaction：规定压缩时必须保留的状态</h2>
+            <p>Compaction instructions 把会话压缩变成有保留清单的状态迁移。</p>
+          </div>
+          <div class="module-content">
+            <p>好的压缩函数可以写成 \(C_{next}=f(C_{raw}, M, I, E)\)。这里直接规定 scope、assets、hypotheses、findings、auth、evidence path、phase 和 next actions 必须保留。</p>
+            <div class="split">
+              <div class="mini">
+                <h3>亮点</h3>
+                <ul>
+                  <li>保留项覆盖“目标、证据、身份态、阶段、下一步”。</li>
+                  <li>丢弃项明确列出 verbose responses、dead-end details 和 redundant output。</li>
+                </ul>
+              </div>
+              <div class="mini">
+                <h3>关键函数</h3>
+                <ul>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/pentest-compaction.ts#L14-L23">pentestCompactionExtension</a>：注入 append system prompt。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/pentest-compaction.ts#L25-L44">getPentestCompactionInstructions</a>：压缩保留协议。</li>
+                </ul>
+              </div>
+            </div>
+            <div class="code-panel">
+              <div class="code-head"><span>pentest-compaction.ts L25-L44</span><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/pentest-compaction.ts#L25-L44">GitHub 跳转</a></div>
+              <pre><code> 25 | export function getPentestCompactionInstructions(): string {
+ 26 |     return `When summarizing this conversation for compaction, you MUST preserve:
+ 27 |
+ 28 | 1. Scope: All in-scope and out-of-scope targets from ${WORKSPACE_FILES.scope}
+ 29 | 2. Known Assets: All discovered assets, endpoints, parameters, technologies
+ 30 | 3. Active Hypotheses: All current vulnerability hypotheses and their status
+ 31 | 4. Confirmed Findings: All verified or candidate findings with evidence references from ${WORKSPACE_FILES.findingsNdjson}
+ 32 | 5. Auth State: Any authentication tokens, cookies, or session information in ${WORKSPACE_DIRS.auth}/
+ 33 | 6. Evidence Paths: All file paths in ${WORKSPACE_DIRS.evidence}/ and ${WORKSPACE_DIRS.subAgents}/
+ 34 | 7. Current Phase: What methodology phase we are in (SCOPE/RECON/HYPOTHESIZE/TEST/DOCUMENT/REPORT)
+ 35 | 8. Next Actions: What should be done next
+ 36 |
+ 37 | You may discard:
+ 38 | - Verbose HTTP response bodies
+ 39 | - Failed/dead-end exploration details
+ 40 | - Redundant tool output
+ 41 | - Intermediate reasoning that led to already-documented conclusions
+ 42 |
+ 43 | Format the summary as structured sections, not prose.`
+ 44 | }</code></pre>
+            </div>
+          </div>
+        </article>
+
+        <article class="module-card" id="module-scope" data-keywords="scope guard boundary tool budget fixed flexible tradeoff 权限 边界">
+          <div class="module-head">
+            <div class="tag-row"><span class="tag red">边界治理</span><span class="tag">固定规则</span></div>
+            <h2>Scope Guard：给主 agent 和子 agent 划工具边界</h2>
+            <p>Scope guard 负责审计或执行工具限制、共享状态写入边界、探索预算和直接行动阈值。</p>
+          </div>
+          <div class="module-content">
+            <p>这体现了固定规则与模型自由度的取舍：系统固定预算、路径、共享状态和提交工具；模型在这些边界内自由选择验证路线与证据解释。</p>
+            <div class="split">
+              <div class="mini">
+                <h3>亮点</h3>
+                <ul>
+                  <li>子 agent 探索调用达到阈值时收到预算提醒。</li>
+                  <li>写共享状态、访问 machine-owned 文件、越界 target 都有规则入口。</li>
+                </ul>
+              </div>
+              <div class="mini">
+                <h3>关键函数</h3>
+                <ul>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/scope-guard.ts#L52-L89">command boundary helpers</a>：判断路径、目标和共享状态。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/scope-guard.ts#L99-L162">scopeGuardExtension</a>：监听工具调用并执行预算逻辑。</li>
+                </ul>
+              </div>
+            </div>
+            <div class="code-panel">
+              <div class="code-head"><span>scope-guard.ts L116-L162</span><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/scope-guard.ts#L116-L162">GitHub 跳转</a></div>
+              <pre><code>116 |     return (pi) =&gt; {
+117 |         pi.on("tool_call", async (event) =&gt; {
+118 |             if (mode === "enforce" &amp;&amp; agentRole !== "main" &amp;&amp; maxToolCalls !== undefined) {
+119 |                 if (event.toolName === SUBMISSION_TOOL_NAME) {
+120 |                     return
+121 |                 }
+122 |
+123 |                 if (isProbingToolName(event.toolName)) {
+124 |                     probingToolCalls += 1
+125 |                     const remainingBudget = maxToolCalls - probingToolCalls
+126 |                     const shouldWarn =
+127 |                         remainingBudget &lt;= EXPLORATION_WARNING_THRESHOLD &amp;&amp;
+128 |                         (lastWarnedRemainingBudget === null || remainingBudget &lt; lastWarnedRemainingBudget)
+129 |                     if (shouldWarn) {
+130 |                         lastWarnedRemainingBudget = remainingBudget
+131 |                         await writeLog(
+132 |                             `[${new Date().toISOString()}] BUDGET_WARN role=${agentRole} output_id=${outputId ?? "-"} probing=${probingToolCalls}/${maxToolCalls}\n`,
+133 |                         )
+134 |                         pi.sendMessage(
+135 |                             {
+136 |                                 customType: "subagent-exploration-budget-warning",
+137 |                                 content: [
+138 |                                     {
+139 |                                         type: "text",
+140 |                                         text:
+141 |                                             `Exploration budget is near exhaustion (${probingToolCalls}/${maxToolCalls}). ` +
+142 |                                             `Stop new probing and switch to consolidation + submit_sub_agent_output.`,
+143 |                                     },</code></pre>
+            </div>
+          </div>
+        </article>
+
+        <article class="module-card" id="module-large-result" data-keywords="large tool result spill context noise 降噪 工具输出">
+          <div class="module-head">
+            <div class="tag-row"><span class="tag">上下文降噪</span><span class="tag warn">外部工件</span></div>
+            <h2>Large Tool Result：大输出落盘，只把定位信息放回上下文</h2>
+            <p>大工具结果容易淹没推理，extension 把完整内容写入 `.tool-results`，上下文只保留摘要和路径。</p>
+          </div>
+          <div class="module-content">
+            <p>这相当于给上下文加了“外部存储层”。模型保留索引和预览，需要细节时再读取文件，避免每次 turn 都携带大段低密度文本。</p>
+            <div class="split">
+              <div class="mini">
+                <h3>亮点</h3>
+                <ul>
+                  <li>按 `maxInlineChars` 触发 spill，默认路径稳定。</li>
+                  <li>返回内容包含 `type=large_tool_result_spill`、原始字符数和相对路径。</li>
+                </ul>
+              </div>
+              <div class="mini">
+                <h3>关键函数</h3>
+                <ul>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/large-tool-result.ts#L31-L45">serializeContentBlocks</a>：序列化 tool result。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/large-tool-result.ts#L91-L122">largeToolResultExtension</a>：监听并落盘大输出。</li>
+                </ul>
+              </div>
+            </div>
+            <div class="code-panel">
+              <div class="code-head"><span>large-tool-result.ts L91-L122</span><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/solver/extension/large-tool-result.ts#L91-L122">GitHub 跳转</a></div>
+              <pre><code> 91 | export function largeToolResultExtension(options: LargeToolResultOptions): ExtensionFactory {
+ 92 |     const maxInlineChars = options.maxInlineChars ?? DEFAULT_MAX_INLINE_CHARS
+ 93 |
+ 94 |     return (pi) =&gt; {
+ 95 |         console.log("Large Tool Result extension initialized")
+ 96 |         pi.on("tool_result", async (event) =&gt; {
+ 97 |             if (shouldBypassForSkillMarkdown(event.toolName, event.input)) return
+ 98 |             const serialized = serializeContentBlocks(event.content)
+ 99 |             if (!serialized.hasContent || serialized.text.length &lt;= maxInlineChars) return
+100 |
+101 |             const outputDir = join(options.workspaceRoot, ".tool-results")
+102 |             await mkdir(outputDir, { recursive: true })
+103 |
+104 |             const fileName = `${Date.now()}-${sanitizeName(event.toolName)}-${sanitizeName(event.toolCallId)}.md`
+105 |             const absPath = join(outputDir, fileName)
+106 |             const relPath = `.tool-results/${fileName}`
+107 |
+108 |             const fileBody = buildSpillFileBody(event.toolName, event.toolCallId, event.input, serialized.text)
+109 |             await Bun.write(absPath, fileBody)
+110 |
+111 |             return {
+112 |                 content: [{ type: "text", text: buildTruncatedMessage(relPath, serialized.text) }],
+113 |                 details: {
+114 |                     type: "large_tool_result_spill",
+115 |                     truncated: true,
+116 |                     originalChars: serialized.text.length,
+117 |                     path: relPath,
+118 |                 },
+119 |             }
+120 |         })
+121 |     }
+122 | }</code></pre>
+            </div>
+          </div>
+        </article>
+
+        <article class="module-card" id="module-timeline" data-keywords="timeline stats replay metrics 复盘 统计 时间轴">
+          <div class="module-head">
+            <div class="tag-row"><span class="tag">复盘层</span><span class="tag warn">可观测性</span></div>
+            <h2>Attack Timeline / Stats：把长程执行变成可复盘数据</h2>
+            <p>Timeline 串起 attempt、submission、solver、observer、memory 和 idea 事件；stats 汇总 token、耗时和解题质量。</p>
+          </div>
+          <div class="module-content">
+            <p>长程 agent 系统需要能解释“为什么成功或失败”。时间轴给过程复盘，统计给策略调参，两者共同支撑 prompt、模型、调度策略的迭代。</p>
+            <div class="split">
+              <div class="mini">
+                <h3>亮点</h3>
+                <ul>
+                  <li>事件按 lane 分类，challenge、submission、solver、observer 可以分轨查看。</li>
+                  <li>stats 读取 session usage，能把成本与解题表现关联起来。</li>
+                </ul>
+              </div>
+              <div class="mini">
+                <h3>关键函数</h3>
+                <ul>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/attack-timeline.ts#L311-L369">buildChallengeAttackTimeline</a>：构建复盘时间轴。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/stats.ts#L200-L268">refreshChallengeStats</a>：刷新题目和 solver 统计。</li>
+                  <li><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/stats.ts#L270-L379">buildChallengeStatsOverview</a>：生成全局统计概览。</li>
+                </ul>
+              </div>
+            </div>
+            <div class="code-panel">
+              <div class="code-head"><span>attack-timeline.ts L311-L350</span><a target="_blank" rel="noreferrer" href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/packages/core/src/challenge/attack-timeline.ts#L311-L350">GitHub 跳转</a></div>
+              <pre><code>311 | export async function buildChallengeAttackTimeline(input: BuildAttackTimelineInput): Promise&lt;AttackTimelineSnapshot&gt; {
+312 |     const events: AttackTimelineEvent[] = []
+313 |     const seenMemoryIds = new Set&lt;string&gt;()
+314 |     const seenIdeaIds = new Set&lt;string&gt;()
+315 |     const attemptSolverIds = new Set(input.attempts.map((attempt) =&gt; attempt.solver_id).filter(Boolean))
+316 |
+317 |     for (const attempt of input.attempts) {
+318 |         const timestamp = parseIsoTimestamp(attempt.created_at)
+319 |         if (!timestamp) continue
+320 |         events.push(
+321 |             createEvent({
+322 |                 idParts: ["attempt", attempt.id],
+323 |                 timestamp,
+324 |                 challengeId: input.challengeId,
+325 |                 solverId: attempt.solver_id,
+326 |                 lane: "challenge",
+327 |                 kind: "solver_started",
+328 |                 title: "Solver started",
+329 |                 summary: `${attempt.prompt_name} · ${attempt.solver_id}`,
+330 |                 payload: { attempt },
+331 |             }),
+332 |         )
+333 |     }
+334 |
+335 |     for (const submission of input.submissions) {
+336 |         const timestamp = parseIsoTimestamp(submission.created_at)
+337 |         if (!timestamp) continue
+338 |         events.push(
+339 |             createEvent({
+340 |                 idParts: ["submission", submission.id],
+341 |                 timestamp,
+342 |                 challengeId: input.challengeId,
+343 |                 solverId: submission.solver_id,
+344 |                 lane: "submission",
+345 |                 kind: "flag_submitted",
+346 |                 title: submission.correct ? "Correct flag" : "Flag submitted",
+347 |                 summary: `${submission.correct ? "correct" : "incorrect"} · ${submission.flag}`,
+348 |                 payload: { submission },
+349 |             }),
+350 |         )</code></pre>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const RAW_ANALYSIS_URL = "https://raw.githubusercontent.com/Nishijujuba/BreachWeave/gpt/docs/agent-long-task-architecture-analysis.md";
+    const REPO_BLOB_BASE = "https://github.com/Nishijujuba/BreachWeave/blob/gpt/";
+    const headingModuleMap = [
+      ["任务拆分", "module-manager"],
+      ["漂移", "module-observer-loop"],
+      ["Ralph-loop", "module-ralph"],
+      ["结束判定", "module-completion"],
+      ["上下文管理", "module-compaction"],
+      ["压缩", "module-compaction"],
+      ["记忆管理", "module-memory"],
+      ["Agent 间通讯", "module-bridge"],
+      ["多 Agent", "module-subagent"],
+      ["固定系统规则", "module-scope"],
+      ["亮点设计", "module-timeline"]
+    ];
+
+    function escapeHtml(value) {
+      return value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function rewriteHref(url) {
+      if (url.startsWith("../")) return REPO_BLOB_BASE + url.slice(3);
+      return url;
+    }
+
+    function inlineMarkdown(raw) {
+      let text = escapeHtml(raw);
+      text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => `<a href="${rewriteHref(url)}" target="_blank" rel="noreferrer">${label}</a>`);
+      text = text.replace(/`([^`]+)`/g, "<code>$1</code>");
+      text = text.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+      return text;
+    }
+
+    function moduleJumpForHeading(text) {
+      const hit = headingModuleMap.find(([key]) => text.includes(key));
+      if (!hit) return "";
+      return `<a class="jump-link" href="#${hit[1]}">右侧模块</a>`;
+    }
+
+    function markdownToHtml(md) {
+      const lines = md.replace(/\r/g, "").split("\n");
+      const out = [];
+      let i = 0;
+      while (i < lines.length) {
+        const line = lines[i];
+        if (!line.trim()) {
+          i += 1;
+          continue;
+        }
+        const heading = line.match(/^(#{1,3})\s+(.*)$/);
+        if (heading) {
+          const level = heading[1].length;
+          const text = heading[2].trim();
+          const id = text.toLowerCase().replace(/[^\w\u4e00-\u9fa5]+/g, "-").replace(/^-|-$/g, "");
+          out.push(`<h${level} id="analysis-${id}">${inlineMarkdown(text)}${moduleJumpForHeading(text)}</h${level}>`);
+          i += 1;
+          continue;
+        }
+        if (line.startsWith("|") && lines[i + 1]?.includes("---")) {
+          const table = [];
+          while (i < lines.length && lines[i].startsWith("|")) {
+            table.push(lines[i]);
+            i += 1;
+          }
+          const rows = table.filter((row, index) => index !== 1).map((row) => row.split("|").slice(1, -1).map((cell) => cell.trim()));
+          out.push("<table><tbody>" + rows.map((row, rowIndex) => {
+            const tag = rowIndex === 0 ? "th" : "td";
+            return "<tr>" + row.map((cell) => `<${tag}>${inlineMarkdown(cell)}</${tag}>`).join("") + "</tr>";
+          }).join("") + "</tbody></table>");
+          continue;
+        }
+        if (/^\s*-\s+/.test(line)) {
+          const items = [];
+          while (i < lines.length && /^\s*-\s+/.test(lines[i])) {
+            items.push(lines[i].replace(/^\s*-\s+/, ""));
+            i += 1;
+          }
+          out.push("<ul>" + items.map((item) => `<li>${inlineMarkdown(item)}</li>`).join("") + "</ul>");
+          continue;
+        }
+        if (/^\s*\d+\.\s+/.test(line)) {
+          const items = [];
+          while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
+            items.push(lines[i].replace(/^\s*\d+\.\s+/, ""));
+            i += 1;
+          }
+          out.push("<ol>" + items.map((item) => `<li>${inlineMarkdown(item)}</li>`).join("") + "</ol>");
+          continue;
+        }
+        if (line.trim() === "\\[") {
+          const math = [];
+          i += 1;
+          while (i < lines.length && lines[i].trim() !== "\\]") {
+            math.push(lines[i]);
+            i += 1;
+          }
+          i += 1;
+          out.push(`<pre class="math"><code>${escapeHtml(math.join("\n"))}</code></pre>`);
+          continue;
+        }
+        out.push(`<p>${inlineMarkdown(line)}</p>`);
+        i += 1;
+      }
+      return out.join("\n");
+    }
+
+    async function loadAnalysis() {
+      const target = document.getElementById("analysisContent");
+      try {
+        const response = await fetch(RAW_ANALYSIS_URL, { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const markdown = await response.text();
+        target.dataset.raw = markdown;
+        target.innerHTML = markdownToHtml(markdown);
+      } catch (error) {
+        target.innerHTML = `<div class="notice">v1 原文加载失败。可打开 <a href="https://github.com/Nishijujuba/BreachWeave/blob/gpt/docs/agent-long-task-architecture-analysis.md" target="_blank" rel="noreferrer">GitHub 原文</a> 查看。错误：${escapeHtml(String(error.message || error))}</div>`;
+      }
+    }
+
+    function applyModuleFilter() {
+      const query = document.getElementById("moduleSearch").value.trim().toLowerCase();
+      const cards = [...document.querySelectorAll(".module-card")];
+      let visible = 0;
+      for (const card of cards) {
+        const haystack = `${card.textContent} ${card.dataset.keywords || ""}`.toLowerCase();
+        const show = !query || haystack.includes(query);
+        card.hidden = !show;
+        if (show) visible += 1;
+      }
+      document.getElementById("moduleCount").textContent = `${visible} / ${cards.length} 个模块`;
+    }
+
+    function applyAnalysisFilter() {
+      const query = document.getElementById("analysisSearch").value.trim().toLowerCase();
+      const target = document.getElementById("analysisContent");
+      if (!query) {
+        [...target.querySelectorAll("[data-filter-hidden]")].forEach((node) => {
+          node.hidden = false;
+          node.removeAttribute("data-filter-hidden");
+        });
+        return;
+      }
+      [...target.children].forEach((node) => {
+        const show = node.textContent.toLowerCase().includes(query);
+        node.hidden = !show;
+        if (!show) node.setAttribute("data-filter-hidden", "true");
+      });
+    }
+
+    document.getElementById("moduleSearch").addEventListener("input", applyModuleFilter);
+    document.getElementById("analysisSearch").addEventListener("input", applyAnalysisFilter);
+    loadAnalysis();
+    applyModuleFilter();
+  </script>
+</body>
+</html>
