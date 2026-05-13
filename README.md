@@ -30,11 +30,13 @@ https://github.com/user-attachments/assets/b051927e-b64f-4bdf-833d-d542e328ad20
 
 项目整体采用 `Manager / Solver / Observer` 的多角色架构。
 
+更详细的长程 agent 设计拆解见：[Agent 长程任务架构分析](./docs/agent-long-task-architecture-analysis.md)。
+
 ### Manager
 
 `Manager` 负责全局编排。
 
-它的职责不是亲自执行利用链，而是站在 challenge 视角做统一调度：
+它不亲自执行利用链，职责集中在 challenge 视角的统一调度：
 
 - 管理题目推进节奏
 - 分配和回收 Solver
@@ -58,7 +60,7 @@ https://github.com/user-attachments/assets/b051927e-b64f-4bdf-833d-d542e328ad20
 
 ### Observer
 
-`Observer` 不直接代替 Solver 解题，而是作为旁路监督角色持续观察任务执行过程。
+`Observer` 不直接代替 Solver 解题，职责是作为旁路监督角色持续观察任务执行过程。
 
 它重点解决的是复杂任务里最容易出现的几个问题：
 
