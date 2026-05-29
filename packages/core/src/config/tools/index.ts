@@ -20,12 +20,14 @@ import { ingestSubAgentOutputTool } from "./ingest-sub-agent-output"
 import { submitSubAgentOutputTool } from "./submit-sub-agent-output"
 import { challengeTools } from "./challenge-tools"
 import { securityKimiSearchTool } from "./security-kimi-search"
+import { sqliScannerTool } from "./sqli-scanner"
 
 // ── 自定义工具 ──
 
 /** 所有自定义工具定义 */
 export const customTools: ToolDefinition[] = [
     securityKimiSearchTool,
+    sqliScannerTool,
     // submitSubAgentOutputTool,
     // ingestSubAgentOutputTool,
     // documentFindingTool,
